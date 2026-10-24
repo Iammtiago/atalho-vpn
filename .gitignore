@@ -1,0 +1,9 @@
+# Terraform: estado (tiene la IP y datos de la cuenta) y variables locales
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/terraform.tfvars
+
+# Configs de clientes (tienen llaves privadas)
+vpn-clientes/
+*.conf
