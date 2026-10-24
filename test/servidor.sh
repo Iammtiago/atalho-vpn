@@ -19,6 +19,11 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq >/dev/null && apt-get install -y -qq iptables >/dev/null
 update-alternatives --set iptables /usr/sbin/iptables-legacy >/dev/null
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy >/dev/null
+# Igual que la imagen de Ubuntu de Oracle Cloud: REJECT al final de INPUT y FORWARD
+iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -j REJECT --reject-with icmp-host-prohibited
+iptables -A FORWARD -j REJECT --reject-with icmp-host-prohibited
 
 export ENDPOINT=$(hostname -i | awk '{print $1}') WG_PORT=51820
 tr -d '\r' < /src/server/install.sh > /tmp/install.sh
@@ -36,7 +41,9 @@ probar "config claude solo lleva rangos de Anthropic" grep -q "AllowedIPs = 160.
 probar "QR se genera" vpnctl qr tiago-iphone
 probar "export deja los archivos para scp" bash -c "vpnctl export tiago-laptop && ls /home/ubuntu/vpn-clientes/tiago-laptop/atalho-vpn-todo.conf"
 probar "NAT configurado" iptables -t nat -C POSTROUTING -s 10.66.66.0/24 -o eth0 -j MASQUERADE
-probar "clientes aislados entre sí" iptables -C FORWARD -i wg0 -o wg0 -j DROP
+probar "clientes aislados entre sí" iptables -C ATALHO-FORWARD -i wg0 -o wg0 -j DROP
+probar "puerto UDP abierto antes de los REJECT" bash -c "iptables -S INPUT | sed -n 2p | grep -q ATALHO-INPUT"
+probar "reiniciar wg0 no duplica reglas" bash -c "wg-quick down wg0 && wg-quick up wg0 && [[ \$(iptables -S FORWARD | grep -c ATALHO) == 1 ]]"
 vpnctl add borrar-me >/dev/null 2>&1
 probar "revocar cliente" vpnctl remove borrar-me
 probar "quedan 2 clientes en wg0" bash -c "[[ \$(wg show wg0 peers | wc -l) == 2 ]]"

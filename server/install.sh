@@ -61,21 +61,38 @@ source /etc/wireguard/atalho-vpn.env
 # Al subir, cualquier regla que falle detiene wg0 (error visible); al bajar se ignoran
 op=-A; if [[ "${1:-up}" == down ]]; then op=-D; else set -e; fi
 
-iptables $op FORWARD -i wg0 -d 169.254.0.0/16 -j DROP            # sin acceso a la metadata de AWS
-iptables $op FORWARD -i wg0 -o wg0 -j DROP                       # los clientes no se ven entre sí
-iptables $op FORWARD -i wg0 -o "$NIC" -j ACCEPT
-iptables $op FORWARD -i "$NIC" -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-iptables -t nat $op POSTROUTING -s "$NET4.0/24" -o "$NIC" -j MASQUERADE
+# Cadenas propias insertadas al inicio de INPUT/FORWARD: así funcionan aunque la imagen
+# traiga reglas REJECT al final (Oracle Cloud las trae)
+for ipt in iptables ip6tables; do
+  for c in INPUT FORWARD; do
+    $ipt -D "$c" -j "ATALHO-$c" 2>/dev/null || true
+    $ipt -F "ATALHO-$c" 2>/dev/null || true
+    $ipt -X "ATALHO-$c" 2>/dev/null || true
+  done
+done
 
-ip6tables $op FORWARD -i wg0 -o wg0 -j DROP
+if [[ $op == -A ]]; then
+  for ipt in iptables ip6tables; do
+    for c in INPUT FORWARD; do $ipt -N "ATALHO-$c"; $ipt -I "$c" 1 -j "ATALHO-$c"; done
+    $ipt -A ATALHO-INPUT -p udp --dport "$WG_PORT" -j ACCEPT
+    $ipt -A ATALHO-FORWARD -i wg0 -o wg0 -j DROP                         # los clientes no se ven entre sí
+  done
+  iptables -A ATALHO-FORWARD -i wg0 -d 169.254.0.0/16 -j DROP           # sin acceso a la metadata de la nube
+  iptables -A ATALHO-FORWARD -i wg0 -o "$NIC" -j ACCEPT
+  iptables -A ATALHO-FORWARD -i "$NIC" -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  if ip -6 addr show dev "$NIC" scope global | grep -q inet6; then
+    ip6tables -A ATALHO-FORWARD -i wg0 -o "$NIC" -j ACCEPT
+    ip6tables -A ATALHO-FORWARD -i "$NIC" -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  else
+    # El servidor no tiene IPv6: se rechaza al instante para que las apps usen IPv4 sin esperar
+    ip6tables -A ATALHO-FORWARD -i wg0 -p tcp -j REJECT --reject-with tcp-reset
+    ip6tables -A ATALHO-FORWARD -i wg0 -j REJECT
+  fi
+fi
+
+iptables -t nat $op POSTROUTING -s "$NET4.0/24" -o "$NIC" -j MASQUERADE
 if ip -6 addr show dev "$NIC" scope global | grep -q inet6; then
-  ip6tables $op FORWARD -i wg0 -o "$NIC" -j ACCEPT
-  ip6tables $op FORWARD -i "$NIC" -o wg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
   ip6tables -t nat $op POSTROUTING -s "${NET6}/64" -o "$NIC" -j MASQUERADE
-else
-  # El servidor no tiene IPv6: se rechaza al instante para que las apps usen IPv4 sin esperar
-  ip6tables $op FORWARD -i wg0 -p tcp -j REJECT --reject-with tcp-reset
-  ip6tables $op FORWARD -i wg0 -j REJECT
 fi
 
 for ipt in iptables ip6tables; do

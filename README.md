@@ -49,9 +49,9 @@ sudo vpnctl qr mi-iphone       # escanear con la app WireGuard del iPhone
 
 La guía completa, paso a paso y con pruebas, está en **[docs/guia-montaje.md](docs/guia-montaje.md)**.
 
-### Sin Terraform
+### Sin Terraform (Oracle Cloud u otro VPS)
 
-En cualquier Ubuntu 24.04 con el puerto UDP 51820 abierto:
+En cualquier Ubuntu 24.04 con el puerto UDP 51820 abierto (en Oracle Cloud Always Free, ver [docs/guia-oracle.md](docs/guia-oracle.md)):
 
 ```bash
 git clone https://github.com/Iammtiago/atalho-vpn.git /opt/atalho-vpn
@@ -62,6 +62,7 @@ sudo ENDPOINT=<ip-publica> bash /opt/atalho-vpn/server/install.sh
 
 | Documento | Contenido |
 |---|---|
+| [docs/guia-oracle.md](docs/guia-oracle.md) | Montaje en **Oracle Cloud Always Free** (São Paulo, gratis permanente) |
 | [docs/guia-montaje.md](docs/guia-montaje.md) | Montaje completo: AWS, servidor, iPhone, Windows, otros usuarios |
 | [docs/vpnctl.md](docs/vpnctl.md) | Referencia del comando `vpnctl` |
 | [docs/problemas.md](docs/problemas.md) | Solución de problemas y actualizaciones |
